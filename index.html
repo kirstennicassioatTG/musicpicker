@@ -604,26 +604,8 @@ function activeTeam() { return data.teams.find(t => t.id === data.activeTeamId) 
 function activeMembers() { return activeTeam()?.members || []; }
 
 // ── Server sync ───────────────────────────────────────────────────────────────
-async function loadData() {
-  try {
-    const res = await fetch('/api/data');
-    const d = await res.json();
-    if (d && Array.isArray(d.teams)) {
-      data = d;
-      // ensure activeTeamId is valid
-      if (!data.teams.find(t => t.id === data.activeTeamId)) {
-        data.activeTeamId = data.teams[0]?.id || null;
-      }
-    }
-  } catch {}
-}
-
 function saveData() {
-  fetch('/api/data', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(data)
-  }).catch(() => {});
+  // data lives in memory — no persistence needed
 }
 
 // ── Team operations ───────────────────────────────────────────────────────────
@@ -996,7 +978,7 @@ document.getElementById('spin-btn').addEventListener('click', spin);
 document.getElementById('wheel-center-btn').addEventListener('click', spin);
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-loadData().then(() => renderAll());
+renderAll();
 </script>
 </body>
 </html>
