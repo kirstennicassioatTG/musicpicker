@@ -604,9 +604,33 @@ function activeTeam() { return data.teams.find(t => t.id === data.activeTeamId) 
 function activeMembers() { return activeTeam()?.members || []; }
 
 // ── Server sync ───────────────────────────────────────────────────────────────
-function saveData() {
-  // data lives in memory — no persistence needed
+async function loadData() {
+  try {
+    const res = await fetch('/api/data');
+    const d = await res.json();
+    if (d && Array.isArray(d.teams)) {
+      data = d;
+      if (!data.teams.find(t => t.id === data.activeTeamId)) {
+        data.activeTeamId = data.teams[0]?.id || null;
+      }
+    }
+  } catch {}
 }
+
+function saveData() {
+  fetch('/api/data', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(data)
+  }).catch(() => {});
+}
+
+// Poll every 5 seconds so teammates' changes appear automatically
+setInterval(async () => {
+  const before = JSON.stringify(data);
+  await loadData();
+  if (JSON.stringify(data) !== before) renderAll();
+}, 5000);
 
 // ── Team operations ───────────────────────────────────────────────────────────
 function addTeam(name) {
@@ -978,7 +1002,7 @@ document.getElementById('spin-btn').addEventListener('click', spin);
 document.getElementById('wheel-center-btn').addEventListener('click', spin);
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-renderAll();
+loadData().then(() => renderAll());
 </script>
 </body>
 </html>
