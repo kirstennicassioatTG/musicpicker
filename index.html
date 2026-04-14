@@ -842,6 +842,13 @@
   <div class="members-grid" id="members-grid"></div>
 </div>
 
+<!-- Change team link -->
+<div style="text-align:center;margin-top:12px">
+  <button id="change-team-btn" style="display:none;background:transparent;border:none;color:#4b5563;font-size:0.82rem;cursor:pointer;text-decoration:underline;text-underline-offset:3px">
+    Not on the right team? Change team
+  </button>
+</div>
+
 <!-- All Songs -->
 <div id="all-songs-section" style="max-width:860px;margin:48px auto 0">
   <div class="section-header">
@@ -856,13 +863,6 @@
     <div id="ob-step1">
       <h3>👋 Which team are you on?</h3>
       <div id="ob-team-grid" style="display:flex;flex-direction:column;gap:8px;margin-top:12px"></div>
-      <div id="ob-new-team-row" style="margin-top:12px;display:flex;flex-direction:column;gap:8px">
-        <button class="modal-cancel-btn" id="ob-create-team-btn" style="width:100%;text-align:center">+ Create new team</button>
-        <div id="ob-new-team-inputs" style="display:none;flex-direction:column;gap:8px">
-          <input class="edit-input" id="ob-team-name" placeholder="Team name" maxlength="40" />
-          <button class="modal-confirm-btn" id="ob-team-create-confirm">Create &amp; join</button>
-        </div>
-      </div>
     </div>
     <div id="ob-step2" style="display:none">
       <h3>What's your name?</h3>
@@ -876,17 +876,6 @@
   </div>
 </div>
 
-<!-- Add team modal -->
-<div class="modal-overlay" id="add-team-modal">
-  <div class="modal">
-    <h3>New Team</h3>
-    <input class="edit-input" id="new-team-name" placeholder="Team name" maxlength="40" />
-    <div class="modal-actions">
-      <button class="modal-cancel-btn" id="team-modal-cancel">Cancel</button>
-      <button class="modal-confirm-btn" id="team-modal-confirm">Create</button>
-    </div>
-  </div>
-</div>
 
 <script>
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -940,9 +929,6 @@ function showOnboarding() {
   obSelectedTeamId = null;
   document.getElementById('ob-step1').style.display = '';
   document.getElementById('ob-step2').style.display = 'none';
-  document.getElementById('ob-new-team-inputs').style.display = 'none';
-  document.getElementById('ob-team-name').value = '';
-  document.getElementById('ob-create-team-btn').style.display = '';
   const grid = document.getElementById('ob-team-grid');
   grid.innerHTML = '';
   data.teams.forEach(t => {
@@ -962,31 +948,6 @@ function obPickTeam(teamId) {
   document.getElementById('ob-name').value = '';
   document.getElementById('ob-error').style.display = 'none';
   setTimeout(() => document.getElementById('ob-name').focus(), 50);
-}
-
-document.getElementById('ob-create-team-btn').addEventListener('click', () => {
-  document.getElementById('ob-create-team-btn').style.display = 'none';
-  document.getElementById('ob-new-team-inputs').style.display = 'flex';
-  setTimeout(() => document.getElementById('ob-team-name').focus(), 50);
-});
-
-document.getElementById('ob-team-name').addEventListener('keydown', e => { if (e.key === 'Enter') obCreateAndJoin(); });
-document.getElementById('ob-team-create-confirm').addEventListener('click', obCreateAndJoin);
-
-async function obCreateAndJoin() {
-  const teamName = document.getElementById('ob-team-name').value.trim();
-  if (!teamName) { document.getElementById('ob-team-name').classList.add('input-error'); return; }
-  const res = await fetch('/api/teams', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: teamName }),
-  }).catch(() => null);
-  if (!res?.ok) return;
-  const team = await res.json();
-  data.teams.push({ ...team, members: [] });
-  data.activeTeamId = team.id;
-  renderTeamTabs();
-  obPickTeam(team.id);
 }
 
 document.getElementById('ob-back').addEventListener('click', () => {
@@ -1081,20 +1042,6 @@ setInterval(async () => {
   if (JSON.stringify(data.teams) !== before) renderAll();
 }, 5000);
 
-// ── Team operations (each calls its own endpoint — no bulk saves) ─────────────
-async function addTeam(name) {
-  const res = await fetch('/api/teams', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ name: name.trim() }),
-  }).catch(() => null);
-  if (!res?.ok) return;
-  const team = await res.json();
-  data.teams.push({ ...team, members: [] });
-  data.activeTeamId = team.id;
-  renderAll();
-}
-
 function switchTeam(id) {
   if (data.activeTeamId === id) return;
   data.activeTeamId = id;
@@ -1102,27 +1049,6 @@ function switchTeam(id) {
   document.getElementById('result-banner').style.display = 'none';
 }
 
-function renameTeam(id, name) {
-  const team = data.teams.find(t => t.id === id);
-  if (!team || !name.trim()) return;
-  team.name = name.trim();
-  renderTeamTabs();
-  fetch(`/api/teams/${id}`, {
-    method: 'PATCH',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ name: name.trim() }),
-  }).catch(() => {});
-}
-
-async function deleteTeam(id) {
-  const team = data.teams.find(t => t.id === id);
-  if (!team) return;
-  data.teams = data.teams.filter(t => t.id !== id);
-  if (data.activeTeamId === id) data.activeTeamId = data.teams[0]?.id || null;
-  renderAll();
-  document.getElementById('result-banner').style.display = 'none';
-  fetch(`/api/teams/${id}`, { method: 'DELETE' }).catch(() => {});
-}
 
 // ── Round robin state ─────────────────────────────────────────────────────────
 const rrState = {}; // teamId → current index into sortedMembers()
@@ -1440,35 +1366,11 @@ function renderTeamTabs() {
     nameEl.className = 'team-tab-name';
     nameEl.textContent = team.name;
 
-    if (team.id === data.activeTeamId) {
-      nameEl.contentEditable = 'true';
-      nameEl.addEventListener('blur', () => renameTeam(team.id, nameEl.textContent));
-      nameEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); } });
-      nameEl.addEventListener('mousedown', e => e.stopPropagation());
-    }
-
     tab.appendChild(nameEl);
-
-    if (data.teams.length > 1) {
-      const del = document.createElement('button');
-      del.className = 'team-tab-delete';
-      del.textContent = '×';
-      del.title = 'Delete team';
-      del.addEventListener('mousedown', e => { e.stopPropagation(); deleteTeam(team.id); });
-      tab.appendChild(del);
-    }
-
-    // mousedown fires before blur, so the switch happens before
-    // the editable name's blur handler rebuilds the DOM
     tab.addEventListener('mousedown', () => switchTeam(team.id));
     row.appendChild(tab);
   });
 
-  const addBtn = document.createElement('button');
-  addBtn.className = 'add-team-btn';
-  addBtn.textContent = '+ New Team';
-  addBtn.addEventListener('click', openTeamModal);
-  row.appendChild(addBtn);
 }
 
 function renderMembers() {
@@ -1479,17 +1381,18 @@ function renderMembers() {
 
   grid.innerHTML = '';
 
-  // Show "Join a Team" button only when user has no identity and teams exist
+  // Show join/change team buttons based on identity state
   const hasIdentity = !!resolveIdentity(data);
   joinBtn.style.display = (data.teams.length > 0 && !hasIdentity) ? '' : 'none';
+  const changeBtn = document.getElementById('change-team-btn');
+  if (changeBtn) changeBtn.style.display = hasIdentity ? '' : 'none';
 
   if (!team) {
     title.textContent = 'Team Playlists';
     grid.innerHTML = `
       <div class="no-team-state" style="grid-column:1/-1">
         <div class="big">🎶</div>
-        <p>Create a team to get started</p>
-        <button class="create-team-btn" onclick="openTeamModal()">+ New Team</button>
+        <p>Loading teams…</p>
       </div>`;
     return;
   }
@@ -1600,34 +1503,13 @@ async function deleteMember(i) {
   await fetch(`/api/members/${member.id}`, { method: 'DELETE' }).catch(() => {});
 }
 
-// ── Join team button (shown when user has no identity yet) ────────────────────
+// ── Join / change team buttons ────────────────────────────────────────────────
 document.getElementById('join-team-btn').addEventListener('click', showOnboarding);
-
-// ── Add team modal ────────────────────────────────────────────────────────────
-function openTeamModal() {
-  document.getElementById('new-team-name').value = '';
-  document.getElementById('add-team-modal').classList.add('open');
-  setTimeout(() => document.getElementById('new-team-name').focus(), 50);
-}
-
-function closeTeamModal() { document.getElementById('add-team-modal').classList.remove('open'); }
-
-document.getElementById('team-modal-cancel').addEventListener('click', closeTeamModal);
-document.getElementById('add-team-modal').addEventListener('click', e => {
-  if (e.target === document.getElementById('add-team-modal')) closeTeamModal();
+document.getElementById('change-team-btn').addEventListener('click', () => {
+  // Clear identity so onboarding treats them as a new user on the new team
+  try { localStorage.removeItem(IDENTITY_KEY); } catch {}
+  showOnboarding();
 });
-document.getElementById('new-team-name').addEventListener('keydown', e => { if (e.key === 'Enter') confirmAddTeam(); });
-document.getElementById('new-team-name').addEventListener('input', () => {
-  document.getElementById('new-team-name').classList.remove('input-error');
-});
-document.getElementById('team-modal-confirm').addEventListener('click', confirmAddTeam);
-
-function confirmAddTeam() {
-  const name = document.getElementById('new-team-name').value.trim();
-  if (!name) { document.getElementById('new-team-name').classList.add('input-error'); return; }
-  closeTeamModal();
-  addTeam(name);
-}
 
 // ── Spin buttons ──────────────────────────────────────────────────────────────
 document.getElementById('spin-btn').addEventListener('click', spin);

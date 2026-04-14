@@ -13,6 +13,11 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 if not DATABASE_URL:
     print("WARNING: DATABASE_URL not set — using local data.json (data will not persist on Railway)")
 
+PREDEFINED_TEAMS = sorted([
+    'Dogs', 'Foxes', 'Lions', 'Monarchs', 'Mustangs',
+    'Otters', 'Penguins', 'Phoenix', 'Rams', 'Raptors', 'Tigers',
+])
+
 # ── DB helpers ────────────────────────────────────────────────────────────────
 def get_db():
     return psycopg2.connect(DATABASE_URL)
@@ -31,6 +36,21 @@ def init_db():
                 VALUES (1, '{"teams": []}')
                 ON CONFLICT (id) DO NOTHING
             """)
+        seed_teams(conn)
+
+def seed_teams(conn):
+    """Ensure every predefined team exists; add missing ones, leave existing ones alone."""
+    data = read_db(conn, lock=True)
+    existing_names = {t['name'] for t in data.get('teams', [])}
+    changed = False
+    for name in PREDEFINED_TEAMS:
+        if name not in existing_names:
+            data['teams'].append({'id': secrets.token_urlsafe(6), 'name': name, 'members': []})
+            changed = True
+    # Sort teams alphabetically
+    data['teams'].sort(key=lambda t: t['name'])
+    if changed:
+        write_db(conn, data)
 
 def read_db(conn, lock=False):
     with conn.cursor() as cur:
@@ -52,10 +72,20 @@ def file_load():
     if os.path.exists('data.json'):
         try:
             with open('data.json') as f:
-                return json.load(f)
+                data = json.load(f)
+                # Seed predefined teams into file store too
+                existing_names = {t['name'] for t in data.get('teams', [])}
+                for name in PREDEFINED_TEAMS:
+                    if name not in existing_names:
+                        data['teams'].append({'id': secrets.token_urlsafe(6), 'name': name, 'members': []})
+                data['teams'].sort(key=lambda t: t['name'])
+                return data
         except Exception:
             pass
-    return {'teams': []}
+    # Fresh file: seed all predefined teams
+    data = {'teams': [{'id': secrets.token_urlsafe(6), 'name': n, 'members': []} for n in PREDEFINED_TEAMS]}
+    file_save(data)
+    return data
 
 def file_save(data):
     with open('data.json', 'w') as f:
@@ -99,33 +129,6 @@ def get_data():
             return jsonify({'teams': []}), 500
     else:
         return jsonify(file_load())
-
-# ── Teams ─────────────────────────────────────────────────────────────────────
-@app.route('/api/teams', methods=['POST'])
-def add_team():
-    name = (request.get_json() or {}).get('name', '').strip()
-    if not name:
-        return '', 400
-    team = {'id': secrets.token_urlsafe(6), 'name': name, 'members': []}
-    with_data(lambda d: d['teams'].append(team))
-    return jsonify(team), 201
-
-@app.route('/api/teams/<team_id>', methods=['PATCH'])
-def rename_team(team_id):
-    name = (request.get_json() or {}).get('name', '').strip()
-    if not name:
-        return '', 400
-    def patch(data):
-        for t in data['teams']:
-            if t['id'] == team_id:
-                t['name'] = name
-    with_data(patch)
-    return '', 204
-
-@app.route('/api/teams/<team_id>', methods=['DELETE'])
-def delete_team(team_id):
-    with_data(lambda d: d.update({'teams': [t for t in d['teams'] if t['id'] != team_id]}))
-    return '', 204
 
 # ── Members ───────────────────────────────────────────────────────────────────
 @app.route('/api/teams/<team_id>/members', methods=['POST'])
