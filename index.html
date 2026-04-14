@@ -39,10 +39,20 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      max-width: 860px;
-      margin: 0 auto 32px;
-      flex-wrap: wrap;
+      max-width: 100%;
+      padding: 10px 16px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: none;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: #0f0f1a;
+      border-bottom: 1px solid #1e1e30;
+      margin-bottom: 24px;
     }
+
+    .team-tabs-row::-webkit-scrollbar { display: none; }
 
     .team-tab {
       display: flex;
