@@ -115,7 +115,8 @@ def with_data(fn):
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 @app.route('/')
-def index():
+@app.route('/<path:team_slug>')
+def index(team_slug=None):
     return send_from_directory('.', 'index.html')
 
 @app.route('/api/data', methods=['GET'])

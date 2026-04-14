@@ -1145,9 +1145,37 @@ setInterval(async () => {
   if (JSON.stringify(data.teams) !== before) renderAll();
 }, 5000);
 
+// ── URL routing ───────────────────────────────────────────────────────────────
+function teamSlug(team) {
+  return team.name.toLowerCase().replace(/\s+/g, '-');
+}
+
+function teamFromSlug(slug) {
+  return data.teams.find(t => teamSlug(t) === slug.toLowerCase()) || null;
+}
+
+function applyUrlTeam() {
+  const slug = window.location.pathname.slice(1); // e.g. "foxes" or "tech-leadership"
+  if (!slug) return;
+  const team = teamFromSlug(slug);
+  if (team) data.activeTeamId = team.id;
+}
+
+function pushTeamUrl(team) {
+  const slug = team ? teamSlug(team) : '';
+  const url = slug ? '/' + slug : '/';
+  if (window.location.pathname !== url) history.pushState({ teamId: team?.id }, '', url);
+}
+
+window.addEventListener('popstate', () => {
+  applyUrlTeam();
+  renderAll();
+});
+
 function switchTeam(id) {
   if (data.activeTeamId === id) return;
   data.activeTeamId = id;
+  pushTeamUrl(activeTeam());
   renderAll();
   document.getElementById('result-banner').style.display = 'none';
 }
@@ -1619,7 +1647,17 @@ document.getElementById('spin-btn').addEventListener('click', spin);
 document.getElementById('wheel-center-btn').addEventListener('click', spin);
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-loadData().then(() => { renderAll(); maybeShowOnboarding(); });
+loadData().then(() => {
+  // URL takes priority over identity for active team (so shared links work)
+  const slug = window.location.pathname.slice(1);
+  if (slug) {
+    applyUrlTeam();
+  }
+  renderAll();
+  // Push URL for active team if not already set
+  if (activeTeam()) pushTeamUrl(activeTeam());
+  maybeShowOnboarding();
+});
 </script>
 </body>
 </html>
