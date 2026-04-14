@@ -851,7 +851,6 @@ function renameTeam(id, name) {
 async function deleteTeam(id) {
   const team = data.teams.find(t => t.id === id);
   if (!team) return;
-  if (!confirm(`Delete team "${team.name}"?\nAll members and songs will be lost.`)) return;
   data.teams = data.teams.filter(t => t.id !== id);
   if (data.activeTeamId === id) data.activeTeamId = data.teams[0]?.id || null;
   renderAll();
@@ -1144,7 +1143,6 @@ async function saveEdit(i) {
 async function deleteMember(i) {
   const team = activeTeam();
   const member = team.members[i];
-  if (!confirm(`Remove ${member.name}?`)) return;
   team.members.splice(i, 1);
   renderMembers();
   await fetch(`/api/members/${member.id}`, { method: 'DELETE' }).catch(() => {});
