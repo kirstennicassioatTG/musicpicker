@@ -162,6 +162,32 @@
     .rr-btn:hover:not(:disabled) { border-color: #4f46e5; background: #4f46e522; }
     .rr-btn:disabled { opacity: 0.25; cursor: not-allowed; }
 
+    #rr-random-btn {
+      margin-top: 10px;
+      background: linear-gradient(135deg, #7c3aed, #f472b6);
+      color: #fff;
+      border: none;
+      border-radius: 999px;
+      padding: 8px 22px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: 0.03em;
+      box-shadow: 0 2px 12px #7c3aed44;
+      transition: opacity 0.15s, transform 0.15s;
+    }
+
+    #rr-random-btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+    #rr-random-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    @keyframes rrSlide {
+      from { transform: translateX(48px); opacity: 0; }
+      to   { transform: translateX(0);    opacity: 1; }
+    }
+
+    .rr-name.rr-sliding { animation: rrSlide 0.12s ease-out; }
+    .rr-avatar.rr-sliding { animation: rrSlide 0.12s ease-out; }
+
     .rr-center {
       flex: 1;
       display: flex;
@@ -758,6 +784,7 @@
       </div>
       <button class="rr-btn" id="rr-next" title="Next">&#8594;</button>
     </div>
+    <button id="rr-random-btn">🎲 Random Pick</button>
   </div>
 
   <!-- Song wheel -->
@@ -1106,6 +1133,64 @@ function renderRoundRobin() {
   nameEl.textContent = m.name;
   posEl.textContent  = `${idx + 1} of ${n}`;
 }
+
+function spinRandom() {
+  const sorted = sortedMembers();
+  if (sorted.length < 1) return;
+
+  const targetIdx = Math.floor(Math.random() * sorted.length);
+  const nameEl   = document.getElementById('rr-name');
+  const avatarEl = document.getElementById('rr-avatar');
+  const posEl    = document.getElementById('rr-pos');
+  const randomBtn = document.getElementById('rr-random-btn');
+  const prevBtn  = document.getElementById('rr-prev');
+  const nextBtn  = document.getElementById('rr-next');
+
+  randomBtn.disabled = true;
+  prevBtn.disabled   = true;
+  nextBtn.disabled   = true;
+
+  const totalSteps = 18 + Math.floor(Math.random() * 8);
+  let step  = 0;
+  let delay = 45;
+
+  function tick() {
+    const isLast = step === totalSteps;
+    const displayIdx = isLast ? targetIdx : Math.floor(Math.random() * sorted.length);
+    const m = sorted[displayIdx];
+    const [bg, fg] = getColor(displayIdx);
+
+    // Trigger slide-in animation
+    nameEl.classList.remove('rr-sliding');
+    avatarEl.classList.remove('rr-sliding');
+    void nameEl.offsetWidth; // force reflow
+    nameEl.classList.add('rr-sliding');
+    avatarEl.classList.add('rr-sliding');
+
+    avatarEl.textContent    = initials(m.name);
+    avatarEl.style.background = bg;
+    avatarEl.style.color    = fg;
+    nameEl.textContent      = m.name;
+    posEl.textContent       = isLast ? `${displayIdx + 1} of ${sorted.length}` : '·  ·  ·';
+
+    if (!isLast) {
+      step++;
+      delay = Math.min(delay * 1.13, 350);
+      setTimeout(tick, delay);
+    } else {
+      setRRIdx(targetIdx);
+      drawWheel();
+      document.getElementById('result-banner').style.display = 'none';
+      randomBtn.disabled = false;
+      prevBtn.disabled   = false;
+      nextBtn.disabled   = false;
+    }
+  }
+
+  tick();
+}
+
+document.getElementById('rr-random-btn').addEventListener('click', spinRandom);
 
 document.getElementById('rr-prev').addEventListener('click', () => {
   const n = sortedMembers().length;
