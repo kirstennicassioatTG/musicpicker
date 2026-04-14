@@ -244,7 +244,7 @@
       letter-spacing: 0.08em;
     }
 
-    #add-member-btn {
+    #join-team-btn {
       background: transparent;
       border: 1px solid #4f46e5;
       color: #a78bfa;
@@ -256,8 +256,7 @@
       transition: background 0.15s;
     }
 
-    #add-member-btn:hover { background: #4f46e522; }
-    #add-member-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    #join-team-btn:hover { background: #4f46e522; }
 
     .members-grid {
       display: grid;
@@ -580,21 +579,9 @@
 <div id="members-section">
   <div class="section-header">
     <h2 id="section-title">Team Playlists</h2>
-    <button id="add-member-btn">+ Add Member</button>
+    <button id="join-team-btn" style="display:none">+ Join a Team</button>
   </div>
   <div class="members-grid" id="members-grid"></div>
-</div>
-
-<!-- Add member modal -->
-<div class="modal-overlay" id="add-member-modal">
-  <div class="modal">
-    <h3>Add Team Member</h3>
-    <input class="edit-input" id="new-member-name" placeholder="Name" maxlength="30" />
-    <div class="modal-actions">
-      <button class="modal-cancel-btn" id="member-modal-cancel">Cancel</button>
-      <button class="modal-confirm-btn" id="member-modal-confirm">Add</button>
-    </div>
-  </div>
 </div>
 
 <!-- Onboarding modal -->
@@ -1000,14 +987,17 @@ function renderMembers() {
   const team = activeTeam();
   const grid = document.getElementById('members-grid');
   const title = document.getElementById('section-title');
-  const addBtn = document.getElementById('add-member-btn');
+  const joinBtn = document.getElementById('join-team-btn');
 
   grid.innerHTML = '';
   drawWheel();
 
+  // Show "Join a Team" button only when user has no identity and teams exist
+  const hasIdentity = !!resolveIdentity(data);
+  joinBtn.style.display = (data.teams.length > 0 && !hasIdentity) ? '' : 'none';
+
   if (!team) {
     title.textContent = 'Team Playlists';
-    addBtn.disabled = true;
     grid.innerHTML = `
       <div class="no-team-state" style="grid-column:1/-1">
         <div class="big">🎶</div>
@@ -1018,7 +1008,6 @@ function renderMembers() {
   }
 
   title.textContent = team.name;
-  addBtn.disabled = false;
 
   if (team.members.length === 0) {
     grid.innerHTML = `<div class="empty-state"><div style="font-size:2.5rem">🎶</div><p>No members yet — add one!</p></div>`;
@@ -1125,42 +1114,8 @@ async function deleteMember(i) {
   await fetch(`/api/members/${member.id}`, { method: 'DELETE' }).catch(() => {});
 }
 
-// ── Add member modal ──────────────────────────────────────────────────────────
-function openMemberModal() {
-  document.getElementById('new-member-name').value = '';
-  document.getElementById('add-member-modal').classList.add('open');
-  setTimeout(() => document.getElementById('new-member-name').focus(), 50);
-}
-
-function closeMemberModal() { document.getElementById('add-member-modal').classList.remove('open'); }
-
-document.getElementById('add-member-btn').addEventListener('click', openMemberModal);
-document.getElementById('member-modal-cancel').addEventListener('click', closeMemberModal);
-document.getElementById('add-member-modal').addEventListener('click', e => {
-  if (e.target === document.getElementById('add-member-modal')) closeMemberModal();
-});
-document.getElementById('new-member-name').addEventListener('keydown', e => { if (e.key === 'Enter') addMember(); });
-document.getElementById('new-member-name').addEventListener('input', () => {
-  document.getElementById('new-member-name').classList.remove('input-error');
-});
-document.getElementById('member-modal-confirm').addEventListener('click', addMember);
-
-async function addMember() {
-  const name = document.getElementById('new-member-name').value.trim();
-  if (!name) { document.getElementById('new-member-name').classList.add('input-error'); return; }
-  const teamId = data.activeTeamId;
-  const res = await fetch(`/api/teams/${teamId}/members`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name }),
-  }).catch(() => null);
-  if (!res?.ok) return;
-  const member = await res.json();
-  const team = activeTeam();
-  if (team) team.members.push(member);
-  closeMemberModal();
-  renderMembers();
-}
+// ── Join team button (shown when user has no identity yet) ────────────────────
+document.getElementById('join-team-btn').addEventListener('click', showOnboarding);
 
 // ── Add team modal ────────────────────────────────────────────────────────────
 function openTeamModal() {
