@@ -290,11 +290,11 @@
       color: #f0f0f0;
     }
 
-    #result-banner .spotify-link {
+    #result-banner .yt-link {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      background: #1db954;
+      background: #ff0000;
       color: #fff;
       text-decoration: none;
       border: none;
@@ -306,7 +306,7 @@
       transition: transform 0.15s, background 0.15s;
     }
 
-    #result-banner .spotify-link:hover { background: #17a349; transform: scale(1.04); }
+    #result-banner .yt-link:hover { background: #cc0000; transform: scale(1.04); }
     #result-banner .no-link { color: #6b7280; font-size: 0.9rem; }
 
     /* ── Members section ── */
@@ -432,14 +432,14 @@
 
     .song-name.empty { color: #4b5563; font-style: italic; font-weight: 400; }
 
-    .spotify-dot {
+    .yt-dot {
       width: 8px; height: 8px;
       border-radius: 50%;
-      background: #1db954;
+      background: #ff0000;
       flex-shrink: 0;
     }
 
-    .spotify-dot.empty { background: #374151; }
+    .yt-dot.empty { background: #374151; }
 
     /* ── Edit mode ── */
     .edit-form { display: flex; flex-direction: column; gap: 10px; }
@@ -1115,17 +1115,17 @@ function showResult(pick, member) {
     return;
   }
   const rawUrl = pick.song.url.trim();
-  const spotifyHtml = rawUrl
-    ? `<button class="spotify-link" onclick="openUrl('${rawUrl.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">
-         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.371-.721.49-1.101.241-3.021-1.858-6.832-2.278-11.322-1.247-.43.1-.859-.17-.959-.6-.1-.43.17-.859.6-.959 4.91-1.12 9.122-.64 12.502 1.441.38.24.49.721.28 1.124zm1.473-3.27c-.301.459-.929.6-1.388.301-3.46-2.131-8.731-2.748-12.821-1.504-.51.149-1.051-.14-1.2-.65-.149-.51.14-1.051.65-1.2 4.67-1.42 10.471-.729 14.44 1.714.449.291.6.929.319 1.339zm.127-3.401c-4.15-2.461-11.002-2.69-14.972-1.489-.631.189-1.291-.17-1.48-.8-.189-.631.17-1.291.8-1.48 4.551-1.381 12.121-1.12 16.891 1.72.571.34.76 1.07.42 1.64-.341.57-1.07.76-1.659.409z"/></svg>
-         Open in Spotify
+  const ytHtml = rawUrl
+    ? `<button class="yt-link" onclick="openUrl('${rawUrl.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">
+         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+         Open in YouTube
        </button>`
-    : `<span class="no-link">No Spotify link added</span>`;
+    : `<span class="no-link">No YouTube link added</span>`;
 
   banner.innerHTML = `
     <div class="member-label">🎵 ${escapeHtml(pick.member)}'s pick</div>
     <div class="song-title">${escapeHtml(pick.song.title)}</div>
-    ${spotifyHtml}
+    ${ytHtml}
   `;
 }
 
@@ -1231,7 +1231,7 @@ function buildViewCard(m, i, isMe) {
     return `<div class="song-item">
       <span class="song-num">${si+1}</span>
       <div class="song-info"><div class="song-name ${has ? '' : 'empty'}">${has ? escapeHtml(s.title) : 'empty slot'}</div></div>
-      <div class="spotify-dot ${has && s.url ? '' : 'empty'}" title="${has && s.url ? 'Spotify link added' : 'No Spotify link'}"></div>
+      <div class="yt-dot ${has && s.url ? '' : 'empty'}" title="${has && s.url ? 'YouTube link added' : 'No YouTube link'}"></div>
     </div>`;
   }).join('');
 
@@ -1255,7 +1255,7 @@ function buildEditCard(m, i) {
   const fields = m.songs.map((s, si) => `
     <div class="song-fields">
       <input class="edit-input" placeholder="Song ${si+1} title" value="${escapeHtml(s.title)}" data-si="${si}" data-field="title" maxlength="80" />
-      <input class="edit-input" placeholder="Spotify URL" value="${escapeHtml(s.url)}" data-si="${si}" data-field="url" />
+      <input class="edit-input" placeholder="YouTube URL" value="${escapeHtml(s.url)}" data-si="${si}" data-field="url" />
     </div>`).join('');
 
   return `
@@ -1267,7 +1267,7 @@ function buildEditCard(m, i) {
     </div>
     <div class="edit-form" id="edit-form-${i}">
       <div class="song-edit-row">
-        <label>Songs (title + Spotify URL)</label>
+        <label>Songs (title + YouTube URL)</label>
         <div class="song-inputs">${fields}</div>
       </div>
       <button class="edit-save-btn" onclick="saveEdit(${i})">Save</button>
