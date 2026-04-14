@@ -114,6 +114,88 @@
       margin-bottom: 40px;
     }
 
+    /* ── Round robin navigator ── */
+    .rr-nav {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      background: #1a1a2e;
+      border: 1px solid #2d2d4e;
+      border-radius: 20px;
+      padding: 16px 20px;
+      width: min(400px, 100%);
+    }
+
+    .rr-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #6b7280;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 12px;
+    }
+
+    .rr-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: min(400px, 100%);
+    }
+
+    .rr-btn {
+      background: #0f0f1a;
+      border: 1px solid #2d2d4e;
+      color: #a78bfa;
+      border-radius: 999px;
+      width: 38px;
+      height: 38px;
+      font-size: 1.1rem;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .rr-btn:hover:not(:disabled) { border-color: #4f46e5; background: #4f46e522; }
+    .rr-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+
+    .rr-center {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 0 12px;
+    }
+
+    .rr-avatar {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.95rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .rr-info { text-align: left; }
+
+    .rr-name {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #f0f0f0;
+    }
+
+    .rr-pos {
+      font-size: 0.75rem;
+      color: #6b7280;
+      margin-top: 2px;
+    }
+
     .wheel-wrapper {
       position: relative;
       width: 340px;
@@ -566,12 +648,29 @@
 
 <!-- Wheel -->
 <div class="wheel-section">
+  <!-- Round robin navigator -->
+  <div class="rr-wrap">
+    <div class="rr-label">🎯 Round Robin — whose turn?</div>
+    <div class="rr-nav">
+      <button class="rr-btn" id="rr-prev" title="Previous">&#8592;</button>
+      <div class="rr-center">
+        <div class="rr-avatar" id="rr-avatar"></div>
+        <div class="rr-info">
+          <div class="rr-name" id="rr-name">—</div>
+          <div class="rr-pos" id="rr-pos">—</div>
+        </div>
+      </div>
+      <button class="rr-btn" id="rr-next" title="Next">&#8594;</button>
+    </div>
+  </div>
+
+  <!-- Song wheel -->
   <div class="wheel-wrapper">
     <div class="wheel-pointer"></div>
     <canvas id="wheel-canvas" width="340" height="340"></canvas>
     <div class="wheel-center" id="wheel-center-btn" title="Spin!">🎲</div>
   </div>
-  <button id="spin-btn">Spin the Wheel</button>
+  <button id="spin-btn">Spin for Song</button>
   <div id="result-banner"></div>
 </div>
 
@@ -858,7 +957,73 @@ async function deleteTeam(id) {
   fetch(`/api/teams/${id}`, { method: 'DELETE' }).catch(() => {});
 }
 
-// ── Wheel ─────────────────────────────────────────────────────────────────────
+// ── Round robin state ─────────────────────────────────────────────────────────
+const rrState = {}; // teamId → current index into sortedMembers()
+
+function sortedMembers() {
+  return [...(activeTeam()?.members || [])].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function getRRIdx() {
+  const n = sortedMembers().length;
+  if (!n) return 0;
+  return ((rrState[data.activeTeamId] ?? 0) % n + n) % n;
+}
+
+function setRRIdx(i) { rrState[data.activeTeamId] = i; }
+
+function currentRRMember() {
+  const sorted = sortedMembers();
+  return sorted.length ? sorted[getRRIdx()] : null;
+}
+
+function renderRoundRobin() {
+  const sorted = sortedMembers();
+  const n = sorted.length;
+  const nameEl  = document.getElementById('rr-name');
+  const posEl   = document.getElementById('rr-pos');
+  const avatarEl = document.getElementById('rr-avatar');
+
+  if (!n) {
+    nameEl.textContent  = 'No members yet';
+    posEl.textContent   = '';
+    avatarEl.textContent = '?';
+    avatarEl.style.background = '#2d2d4e';
+    avatarEl.style.color = '#6b7280';
+    return;
+  }
+
+  const idx = getRRIdx();
+  const m = sorted[idx];
+  const [bg, fg] = getColor(idx);
+  avatarEl.textContent = initials(m.name);
+  avatarEl.style.background = bg;
+  avatarEl.style.color = fg;
+  nameEl.textContent = m.name;
+  posEl.textContent  = `${idx + 1} of ${n}`;
+}
+
+document.getElementById('rr-prev').addEventListener('click', () => {
+  const n = sortedMembers().length;
+  if (!n) return;
+  setRRIdx((getRRIdx() - 1 + n) % n);
+  renderRoundRobin();
+  wheelAngle = 0;
+  drawWheel();
+  document.getElementById('result-banner').style.display = 'none';
+});
+
+document.getElementById('rr-next').addEventListener('click', () => {
+  const n = sortedMembers().length;
+  if (!n) return;
+  setRRIdx((getRRIdx() + 1) % n);
+  renderRoundRobin();
+  wheelAngle = 0;
+  drawWheel();
+  document.getElementById('result-banner').style.display = 'none';
+});
+
+// ── Wheel (shows current round-robin member's songs) ──────────────────────────
 const canvas = document.getElementById('wheel-canvas');
 const ctx = canvas.getContext('2d');
 let wheelAngle = 0;
@@ -867,24 +1032,26 @@ let spinning = false;
 function drawWheel() {
   const W = canvas.width, cx = W/2, cy = W/2, r = W/2 - 4;
   ctx.clearRect(0, 0, W, W);
-  const members = activeMembers();
 
-  if (members.length === 0) {
+  const member = currentRRMember();
+  const songs = member ? member.songs.filter(s => s.title.trim()) : [];
+
+  if (!member || songs.length === 0) {
     ctx.fillStyle = '#1e1e30';
     ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
     ctx.fillStyle = '#4b5563';
     ctx.font = '14px system-ui';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(activeTeam() ? 'Add members to spin!' : 'Create a team to get started', cx, cy);
+    ctx.fillText(member ? `${member.name} has no songs yet` : 'No members yet', cx, cy);
     return;
   }
 
-  const slice = (Math.PI*2) / members.length;
-  members.forEach((m, i) => {
+  const slice = (Math.PI*2) / songs.length;
+  songs.forEach((s, i) => {
     const [bg, fg] = getColor(i);
     const startA = wheelAngle + i * slice;
-    const endA = startA + slice;
+    const endA   = startA + slice;
     ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, r, startA, endA); ctx.closePath();
     ctx.fillStyle = bg; ctx.fill();
     ctx.strokeStyle = '#0f0f1a'; ctx.lineWidth = 2; ctx.stroke();
@@ -892,8 +1059,9 @@ function drawWheel() {
     ctx.translate(cx, cy); ctx.rotate(startA + slice/2);
     ctx.textAlign = 'right';
     ctx.fillStyle = fg;
-    ctx.font = `bold ${members.length > 6 ? 11 : 13}px system-ui`;
-    ctx.fillText(m.name.length > 12 ? m.name.slice(0,12)+'…' : m.name, r - 12, 0);
+    ctx.font = `bold ${songs.length > 4 ? 11 : 13}px system-ui`;
+    const label = s.title.length > 18 ? s.title.slice(0, 18) + '…' : s.title;
+    ctx.fillText(label, r - 12, 0);
     ctx.restore();
   });
 
@@ -902,12 +1070,11 @@ function drawWheel() {
 }
 
 function spin() {
-  const members = activeMembers();
-  if (spinning || members.length === 0) return;
+  const member = currentRRMember();
+  if (spinning || !member) return;
 
-  const pool = [];
-  members.forEach(m => m.songs.forEach(s => { if (s.title.trim()) pool.push({member: m.name, song: s}); }));
-  if (pool.length === 0) { showResult(null); return; }
+  const songs = member.songs.filter(s => s.title.trim());
+  if (songs.length === 0) { showResult(null, member); return; }
 
   spinning = true;
   document.getElementById('spin-btn').disabled = true;
@@ -929,26 +1096,22 @@ function spin() {
     } else {
       spinning = false;
       document.getElementById('spin-btn').disabled = false;
-      const slice = (Math.PI*2) / members.length;
+      const slice = (Math.PI*2) / songs.length;
       const normalized = (((-wheelAngle) % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
       const adjustedAngle = ((normalized + 3*Math.PI/2) % (Math.PI*2));
-      const winIndex = Math.floor(adjustedAngle / slice) % members.length;
-      const winner = members[winIndex];
-      const songs = winner.songs.filter(s => s.title.trim());
-      const picked = songs.length > 0
-        ? songs[Math.floor(Math.random() * songs.length)]
-        : pool[Math.floor(Math.random() * pool.length)].song;
-      showResult({ member: winner.name, song: picked });
+      const winIndex = Math.floor(adjustedAngle / slice) % songs.length;
+      showResult({ member: member.name, song: songs[winIndex] });
     }
   }
   requestAnimationFrame(frame);
 }
 
-function showResult(pick) {
+function showResult(pick, member) {
   const banner = document.getElementById('result-banner');
   banner.style.display = 'block';
   if (!pick) {
-    banner.innerHTML = `<div class="song-title">No songs yet — add some below!</div>`;
+    const who = member ? `${member.name} hasn't added any songs yet!` : 'No songs yet — add some below!';
+    banner.innerHTML = `<div class="song-title">${escapeHtml(who)}</div>`;
     return;
   }
   const rawUrl = pick.song.url.trim();
@@ -975,6 +1138,8 @@ function openUrl(url) {
 function renderAll() {
   renderTeamTabs();
   renderMembers();
+  renderRoundRobin();
+  drawWheel();
 }
 
 function renderTeamTabs() {
@@ -1025,7 +1190,6 @@ function renderMembers() {
   const joinBtn = document.getElementById('join-team-btn');
 
   grid.innerHTML = '';
-  drawWheel();
 
   // Show "Join a Team" button only when user has no identity and teams exist
   const hasIdentity = !!resolveIdentity(data);
