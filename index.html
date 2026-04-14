@@ -913,19 +913,28 @@ function enterEdit(i) {
   card.innerHTML = buildEditCard(activeTeam().members[i], i);
 }
 
-function saveEdit(i) {
+async function saveEdit(i) {
   const team = activeTeam();
+  const member = team.members[i];
   const nameInput = document.getElementById(`edit-name-${i}`);
-  const name = nameInput ? nameInput.value.trim() : team.members[i].name;
+  const name = nameInput ? nameInput.value.trim() : member.name;
   if (!name) return;
   const form = document.getElementById(`edit-form-${i}`);
   const songs = emptySongs();
   form.querySelectorAll('[data-si]').forEach(input => {
     songs[parseInt(input.dataset.si)][input.dataset.field] = input.value.trim();
   });
-  team.members[i] = { ...team.members[i], name, songs };
-  saveData();
+
+  // Update local state immediately for snappy UI
+  team.members[i] = { ...member, name, songs };
   renderMembers();
+
+  // Save only this member's data — won't overwrite anyone else's changes
+  await fetch(`/api/members/${member.id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, songs }),
+  }).catch(() => {});
 }
 
 function deleteMember(i) {
