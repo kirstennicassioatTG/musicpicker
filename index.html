@@ -1444,7 +1444,7 @@ function renderTeamTabs() {
       nameEl.contentEditable = 'true';
       nameEl.addEventListener('blur', () => renameTeam(team.id, nameEl.textContent));
       nameEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); } });
-      nameEl.addEventListener('click', e => e.stopPropagation());
+      nameEl.addEventListener('mousedown', e => e.stopPropagation());
     }
 
     tab.appendChild(nameEl);
@@ -1454,11 +1454,13 @@ function renderTeamTabs() {
       del.className = 'team-tab-delete';
       del.textContent = '×';
       del.title = 'Delete team';
-      del.addEventListener('click', e => { e.stopPropagation(); deleteTeam(team.id); });
+      del.addEventListener('mousedown', e => { e.stopPropagation(); deleteTeam(team.id); });
       tab.appendChild(del);
     }
 
-    tab.addEventListener('click', () => switchTeam(team.id));
+    // mousedown fires before blur, so the switch happens before
+    // the editable name's blur handler rebuilds the DOM
+    tab.addEventListener('mousedown', () => switchTeam(team.id));
     row.appendChild(tab);
   });
 
