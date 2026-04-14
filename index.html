@@ -720,10 +720,13 @@ async function confirmOnboarding() {
   const team = data.teams.find(t => t.id === obSelectedTeamId);
   if (!team) return;
 
-  // Duplicate name check
-  if (team.members.some(m => m.name.toLowerCase() === name.toLowerCase())) {
-    errEl.textContent = `Someone named "${name}" is already on this team.`;
-    errEl.style.display = '';
+  // If name already exists, reclaim that card as "mine" instead of blocking
+  const existing = team.members.find(m => m.name.toLowerCase() === name.toLowerCase());
+  if (existing) {
+    setIdentity(obSelectedTeamId, existing.id);
+    data.activeTeamId = obSelectedTeamId;
+    document.getElementById('onboarding-modal').classList.remove('open');
+    renderAll();
     return;
   }
 
