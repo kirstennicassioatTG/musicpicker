@@ -43,7 +43,9 @@ def write_db(conn, data):
         cur.execute("UPDATE store SET data = %s WHERE id = 1", [psycopg2.extras.Json(data)])
 
 def empty_songs():
-    return [{'title': '', 'url': ''} for _ in range(5)]
+    songs = [{'title': '', 'url': ''} for _ in range(5)]
+    songs[0] = {'title': 'Default', 'url': 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RDdQw4w9WgXcQ&start_radio=1'}
+    return songs
 
 # ── Local file fallback (no DATABASE_URL) ─────────────────────────────────────
 def file_load():
