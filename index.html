@@ -526,6 +526,35 @@
     }
 
     .modal-confirm-btn:hover { opacity: 0.9; }
+
+    /* ── "Mine" card treatment ── */
+    .member-card--mine {
+      border-color: #f472b6;
+      box-shadow: 0 0 20px #f472b622;
+    }
+
+    .you-badge {
+      background: #f472b622;
+      color: #f472b6;
+      border: 1px solid #f472b644;
+      border-radius: 999px;
+      padding: 1px 8px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── Onboarding team grid ── */
+    #ob-team-grid button {
+      width: 100%;
+      text-align: left;
+      margin: 0;
+      background: #0f0f1a;
+      border: 1px solid #4f46e5;
+      color: #f0f0f0;
+    }
+
+    #ob-team-grid button:hover { background: #4f46e522; }
   </style>
 </head>
 <body>
@@ -568,6 +597,25 @@
   </div>
 </div>
 
+<!-- Onboarding modal -->
+<div class="modal-overlay" id="onboarding-modal">
+  <div class="modal">
+    <div id="ob-step1">
+      <h3>👋 Which team are you on?</h3>
+      <div id="ob-team-grid" style="display:flex;flex-direction:column;gap:8px;margin-top:12px"></div>
+    </div>
+    <div id="ob-step2" style="display:none">
+      <h3>What's your name?</h3>
+      <input class="edit-input" id="ob-name" placeholder="Your name" maxlength="30" style="margin-top:8px" />
+      <div id="ob-error" style="color:#ef4444;font-size:0.8rem;margin-top:6px;display:none"></div>
+      <div class="modal-actions">
+        <button class="modal-cancel-btn" id="ob-back">← Back</button>
+        <button class="modal-confirm-btn" id="ob-confirm">Join Team</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Add team modal -->
 <div class="modal-overlay" id="add-team-modal">
   <div class="modal">
@@ -597,6 +645,115 @@ function escapeHtml(s) {
 }
 function emptySongs() { return Array.from({length:5}, () => ({title:'', url:''})); }
 
+// ── Identity ──────────────────────────────────────────────────────────────────
+const IDENTITY_KEY = 'musicpicker_identity';
+
+function getIdentity() {
+  try { return JSON.parse(localStorage.getItem(IDENTITY_KEY)) || null; }
+  catch { return null; }
+}
+
+function setIdentity(teamId, memberId) {
+  try { localStorage.setItem(IDENTITY_KEY, JSON.stringify({ teamId, memberId })); }
+  catch {}
+}
+
+function resolveIdentity(d) {
+  const id = getIdentity();
+  if (!id) return null;
+  const team = d.teams.find(t => t.id === id.teamId);
+  if (!team) return null;
+  const member = team.members.find(m => m.id === id.memberId);
+  if (!member) return null;
+  return { team, member };
+}
+
+// ── Onboarding modal ──────────────────────────────────────────────────────────
+let obSelectedTeamId = null;
+
+function maybeShowOnboarding() {
+  if (resolveIdentity(data)) return;   // already have a valid identity
+  if (data.teams.length === 0) return; // no teams yet — nothing to join
+  showOnboarding();
+}
+
+function showOnboarding() {
+  obSelectedTeamId = null;
+  document.getElementById('ob-step1').style.display = '';
+  document.getElementById('ob-step2').style.display = 'none';
+  const grid = document.getElementById('ob-team-grid');
+  grid.innerHTML = '';
+  data.teams.forEach(t => {
+    const btn = document.createElement('button');
+    btn.className = 'modal-confirm-btn';
+    btn.textContent = t.name;
+    btn.addEventListener('click', () => {
+      obSelectedTeamId = t.id;
+      document.getElementById('ob-step1').style.display = 'none';
+      document.getElementById('ob-step2').style.display = '';
+      document.getElementById('ob-name').value = '';
+      document.getElementById('ob-error').style.display = 'none';
+      setTimeout(() => document.getElementById('ob-name').focus(), 50);
+    });
+    grid.appendChild(btn);
+  });
+  document.getElementById('onboarding-modal').classList.add('open');
+}
+
+document.getElementById('ob-back').addEventListener('click', () => {
+  document.getElementById('ob-step1').style.display = '';
+  document.getElementById('ob-step2').style.display = 'none';
+});
+
+document.getElementById('ob-name').addEventListener('keydown', e => { if (e.key === 'Enter') confirmOnboarding(); });
+document.getElementById('ob-name').addEventListener('input', () => {
+  document.getElementById('ob-name').classList.remove('input-error');
+  document.getElementById('ob-error').style.display = 'none';
+});
+document.getElementById('ob-confirm').addEventListener('click', confirmOnboarding);
+
+async function confirmOnboarding() {
+  const name = document.getElementById('ob-name').value.trim();
+  const errEl = document.getElementById('ob-error');
+  if (!name) { document.getElementById('ob-name').classList.add('input-error'); return; }
+
+  const team = data.teams.find(t => t.id === obSelectedTeamId);
+  if (!team) return;
+
+  // Duplicate name check
+  if (team.members.some(m => m.name.toLowerCase() === name.toLowerCase())) {
+    errEl.textContent = `Someone named "${name}" is already on this team.`;
+    errEl.style.display = '';
+    return;
+  }
+
+  const res = await fetch(`/api/teams/${obSelectedTeamId}/members`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  }).catch(() => null);
+
+  if (!res?.ok) {
+    errEl.textContent = 'Something went wrong. Please try again.';
+    errEl.style.display = '';
+    return;
+  }
+
+  const member = await res.json();
+  setIdentity(obSelectedTeamId, member.id);
+
+  // Update local state
+  team.members.push(member);
+  data.activeTeamId = obSelectedTeamId;
+
+  document.getElementById('onboarding-modal').classList.remove('open');
+  renderAll();
+
+  // Auto-open edit mode for the new card
+  const idx = team.members.findIndex(m => m.id === member.id);
+  if (idx !== -1) setTimeout(() => enterEdit(idx), 80);
+}
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let data = { activeTeamId: null, teams: [] };
 
@@ -610,55 +767,65 @@ async function loadData() {
     const d = await res.json();
     if (d && Array.isArray(d.teams)) {
       data = d;
-      // ensure activeTeamId is valid
-      if (!data.teams.find(t => t.id === data.activeTeamId)) {
+      const resolved = resolveIdentity(data);
+      if (resolved) {
+        data.activeTeamId = resolved.team.id;
+      } else if (!data.teams.find(t => t.id === data.activeTeamId)) {
         data.activeTeamId = data.teams[0]?.id || null;
       }
     }
   } catch {}
 }
 
-function saveData() {
-  fetch('/api/data', {
+// Poll every 5s — compare only teams to avoid false diffs from local activeTeamId
+setInterval(async () => {
+  const before = JSON.stringify(data.teams);
+  await loadData();
+  if (JSON.stringify(data.teams) !== before) renderAll();
+}, 5000);
+
+// ── Team operations (each calls its own endpoint — no bulk saves) ─────────────
+async function addTeam(name) {
+  const res = await fetch('/api/teams', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(data)
-  }).catch(() => {});
-}
-
-// ── Team operations ───────────────────────────────────────────────────────────
-function addTeam(name) {
-  const id = uid();
-  data.teams.push({ id, name: name.trim(), members: [] });
-  data.activeTeamId = id;
-  saveData();
+    body: JSON.stringify({ name: name.trim() }),
+  }).catch(() => null);
+  if (!res?.ok) return;
+  const team = await res.json();
+  data.teams.push({ ...team, members: [] });
+  data.activeTeamId = team.id;
   renderAll();
 }
 
 function switchTeam(id) {
   if (data.activeTeamId === id) return;
   data.activeTeamId = id;
-  saveData();
   renderAll();
   document.getElementById('result-banner').style.display = 'none';
 }
 
 function renameTeam(id, name) {
   const team = data.teams.find(t => t.id === id);
-  if (team && name.trim()) { team.name = name.trim(); saveData(); }
+  if (!team || !name.trim()) return;
+  team.name = name.trim();
+  renderTeamTabs();
+  fetch(`/api/teams/${id}`, {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ name: name.trim() }),
+  }).catch(() => {});
 }
 
-function deleteTeam(id) {
+async function deleteTeam(id) {
   const team = data.teams.find(t => t.id === id);
   if (!team) return;
   if (!confirm(`Delete team "${team.name}"?\nAll members and songs will be lost.`)) return;
   data.teams = data.teams.filter(t => t.id !== id);
-  if (data.activeTeamId === id) {
-    data.activeTeamId = data.teams[0]?.id || null;
-  }
-  saveData();
+  if (data.activeTeamId === id) data.activeTeamId = data.teams[0]?.id || null;
   renderAll();
   document.getElementById('result-banner').style.display = 'none';
+  fetch(`/api/teams/${id}`, { method: 'DELETE' }).catch(() => {});
 }
 
 // ── Wheel ─────────────────────────────────────────────────────────────────────
@@ -850,16 +1017,18 @@ function renderMembers() {
     return;
   }
 
+  const identity = resolveIdentity(data);
   team.members.forEach((m, i) => {
+    const isMe = !!(identity && m.id === identity.member.id);
     const card = document.createElement('div');
-    card.className = 'member-card';
+    card.className = 'member-card' + (isMe ? ' member-card--mine' : '');
     card.dataset.index = i;
-    card.innerHTML = buildViewCard(m, i);
+    card.innerHTML = buildViewCard(m, i, isMe);
     grid.appendChild(card);
   });
 }
 
-function buildViewCard(m, i) {
+function buildViewCard(m, i, isMe) {
   const [bg, fg] = getColor(i);
   const songRows = m.songs.map((s, si) => {
     const has = s.title.trim();
@@ -870,15 +1039,17 @@ function buildViewCard(m, i) {
     </div>`;
   }).join('');
 
+  const badge  = isMe ? `<span class="you-badge">You</span>` : '';
+  const editBtn = isMe ? `<button class="icon-btn" onclick="enterEdit(${i})" title="Edit your songs">✏️</button>` : '';
+
   return `
     <div class="member-card-header">
       <div class="member-name">
         <div class="member-avatar" style="background:${bg};color:${fg}">${escapeHtml(initials(m.name))}</div>
         ${escapeHtml(m.name)}
+        ${badge}
       </div>
-      <div class="card-actions">
-        <button class="icon-btn" onclick="enterEdit(${i})" title="Edit songs">✏️</button>
-      </div>
+      <div class="card-actions">${editBtn}</div>
     </div>
     <div class="song-list">${songRows}</div>`;
 }
@@ -937,12 +1108,13 @@ async function saveEdit(i) {
   }).catch(() => {});
 }
 
-function deleteMember(i) {
+async function deleteMember(i) {
   const team = activeTeam();
-  if (!confirm(`Remove ${team.members[i].name}?`)) return;
+  const member = team.members[i];
+  if (!confirm(`Remove ${member.name}?`)) return;
   team.members.splice(i, 1);
-  saveData();
   renderMembers();
+  await fetch(`/api/members/${member.id}`, { method: 'DELETE' }).catch(() => {});
 }
 
 // ── Add member modal ──────────────────────────────────────────────────────────
@@ -965,11 +1137,19 @@ document.getElementById('new-member-name').addEventListener('input', () => {
 });
 document.getElementById('member-modal-confirm').addEventListener('click', addMember);
 
-function addMember() {
+async function addMember() {
   const name = document.getElementById('new-member-name').value.trim();
   if (!name) { document.getElementById('new-member-name').classList.add('input-error'); return; }
-  activeTeam().members.push({ name, songs: emptySongs() });
-  saveData();
+  const teamId = data.activeTeamId;
+  const res = await fetch(`/api/teams/${teamId}/members`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  }).catch(() => null);
+  if (!res?.ok) return;
+  const member = await res.json();
+  const team = activeTeam();
+  if (team) team.members.push(member);
   closeMemberModal();
   renderMembers();
 }
@@ -1005,7 +1185,7 @@ document.getElementById('spin-btn').addEventListener('click', spin);
 document.getElementById('wheel-center-btn').addEventListener('click', spin);
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-loadData().then(() => renderAll());
+loadData().then(() => { renderAll(); maybeShowOnboarding(); });
 </script>
 </body>
 </html>
