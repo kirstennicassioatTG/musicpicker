@@ -912,19 +912,35 @@ function getIdentity() {
   catch { return null; }
 }
 
-function setIdentity(teamId, memberId) {
-  try { localStorage.setItem(IDENTITY_KEY, JSON.stringify({ teamId, memberId })); }
+function setIdentity(teamId, memberId, name) {
+  try { localStorage.setItem(IDENTITY_KEY, JSON.stringify({ teamId, memberId, name })); }
   catch {}
 }
 
 function resolveIdentity(d) {
   const id = getIdentity();
   if (!id) return null;
-  const team = d.teams.find(t => t.id === id.teamId);
-  if (!team) return null;
-  const member = team.members.find(m => m.id === id.memberId);
-  if (!member) return null;
-  return { team, member };
+
+  // 1. Try exact ID match (fast path)
+  const teamById = d.teams.find(t => t.id === id.teamId);
+  if (teamById) {
+    const memberById = teamById.members.find(m => m.id === id.memberId);
+    if (memberById) return { team: teamById, member: memberById };
+  }
+
+  // 2. Fallback: search by name across all teams (handles SQL moves / ID changes)
+  if (id.name) {
+    for (const t of d.teams) {
+      const m = t.members.find(m => m.name.toLowerCase() === id.name.toLowerCase());
+      if (m) {
+        // Heal the stored identity so next load is instant
+        setIdentity(t.id, m.id, m.name);
+        return { team: t, member: m };
+      }
+    }
+  }
+
+  return null;
 }
 
 // ── Onboarding modal ──────────────────────────────────────────────────────────
@@ -1009,7 +1025,7 @@ async function executeMemberMove() {
   }
 
   const newMember = await res.json();
-  setIdentity(obSelectedTeamId, newMember.id);
+  setIdentity(obSelectedTeamId, newMember.id, newMember.name);
 
   // Update local state
   fromTeam.members = fromTeam.members.filter(m => m.id !== member.id);
@@ -1040,7 +1056,7 @@ async function confirmOnboarding() {
   // Name exists on THIS team → reclaim
   const existingHere = team.members.find(m => m.name.toLowerCase() === name.toLowerCase());
   if (existingHere) {
-    setIdentity(obSelectedTeamId, existingHere.id);
+    setIdentity(obSelectedTeamId, existingHere.id, existingHere.name);
     data.activeTeamId = obSelectedTeamId;
     document.getElementById('onboarding-modal').classList.remove('open');
     renderAll();
@@ -1078,7 +1094,7 @@ async function confirmOnboarding() {
   }
 
   const member = await res.json();
-  setIdentity(obSelectedTeamId, member.id);
+  setIdentity(obSelectedTeamId, member.id, member.name);
   team.members.push(member);
   data.activeTeamId = obSelectedTeamId;
 
