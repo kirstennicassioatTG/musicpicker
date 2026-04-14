@@ -873,6 +873,14 @@
         <button class="modal-confirm-btn" id="ob-confirm">Join Team</button>
       </div>
     </div>
+    <div id="ob-step3" style="display:none">
+      <h3>Already on another team</h3>
+      <p id="ob-move-msg" style="color:#d1d5db;font-size:0.9rem;margin:12px 0 4px;line-height:1.5"></p>
+      <div class="modal-actions">
+        <button class="modal-cancel-btn" id="ob-move-back">← Back</button>
+        <button class="modal-confirm-btn" id="ob-move-confirm">Move Team</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -962,6 +970,50 @@ document.getElementById('ob-name').addEventListener('input', () => {
 });
 document.getElementById('ob-confirm').addEventListener('click', confirmOnboarding);
 
+// Move confirmation (step 3)
+let obPendingMove = null; // { member, fromTeam }
+
+document.getElementById('ob-move-back').addEventListener('click', () => {
+  obPendingMove = null;
+  document.getElementById('ob-step2').style.display = '';
+  document.getElementById('ob-step3').style.display = 'none';
+});
+
+document.getElementById('ob-move-confirm').addEventListener('click', executeMemberMove);
+
+async function executeMemberMove() {
+  if (!obPendingMove) return;
+  const { member, fromTeam } = obPendingMove;
+  const toTeam = data.teams.find(t => t.id === obSelectedTeamId);
+  if (!toTeam) return;
+
+  const res = await fetch(`/api/teams/${obSelectedTeamId}/members`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: member.name, songs: member.songs, move_from: member.id }),
+  }).catch(() => null);
+
+  if (!res?.ok) {
+    document.getElementById('ob-move-msg').textContent = 'Something went wrong. Please try again.';
+    return;
+  }
+
+  const newMember = await res.json();
+  setIdentity(obSelectedTeamId, newMember.id);
+
+  // Update local state
+  fromTeam.members = fromTeam.members.filter(m => m.id !== member.id);
+  toTeam.members.push(newMember);
+  data.activeTeamId = obSelectedTeamId;
+  obPendingMove = null;
+
+  document.getElementById('onboarding-modal').classList.remove('open');
+  renderAll();
+
+  const idx = toTeam.members.findIndex(m => m.id === newMember.id);
+  if (idx !== -1) setTimeout(() => enterEdit(idx), 80);
+}
+
 async function confirmOnboarding() {
   const name = document.getElementById('ob-name').value.trim();
   const errEl = document.getElementById('ob-error');
@@ -975,16 +1027,34 @@ async function confirmOnboarding() {
   const team = data.teams.find(t => t.id === obSelectedTeamId);
   if (!team) return;
 
-  // If name already exists, reclaim that card as "mine" instead of blocking
-  const existing = team.members.find(m => m.name.toLowerCase() === name.toLowerCase());
-  if (existing) {
-    setIdentity(obSelectedTeamId, existing.id);
+  // Name exists on THIS team → reclaim
+  const existingHere = team.members.find(m => m.name.toLowerCase() === name.toLowerCase());
+  if (existingHere) {
+    setIdentity(obSelectedTeamId, existingHere.id);
     data.activeTeamId = obSelectedTeamId;
     document.getElementById('onboarding-modal').classList.remove('open');
     renderAll();
     return;
   }
 
+  // Name exists on a DIFFERENT team → offer to move
+  let foundMember = null, foundTeam = null;
+  for (const t of data.teams) {
+    if (t.id === obSelectedTeamId) continue;
+    const m = t.members.find(m => m.name.toLowerCase() === name.toLowerCase());
+    if (m) { foundMember = m; foundTeam = t; break; }
+  }
+
+  if (foundMember) {
+    obPendingMove = { member: foundMember, fromTeam: foundTeam };
+    document.getElementById('ob-move-msg').textContent =
+      `${foundMember.name} is currently on ${foundTeam.name}. Move them to ${team.name}? Their songs will come with them.`;
+    document.getElementById('ob-step2').style.display = 'none';
+    document.getElementById('ob-step3').style.display = '';
+    return;
+  }
+
+  // Brand new member
   const res = await fetch(`/api/teams/${obSelectedTeamId}/members`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -999,15 +1069,12 @@ async function confirmOnboarding() {
 
   const member = await res.json();
   setIdentity(obSelectedTeamId, member.id);
-
-  // Update local state
   team.members.push(member);
   data.activeTeamId = obSelectedTeamId;
 
   document.getElementById('onboarding-modal').classList.remove('open');
   renderAll();
 
-  // Auto-open edit mode for the new card
   const idx = team.members.findIndex(m => m.id === member.id);
   if (idx !== -1) setTimeout(() => enterEdit(idx), 80);
 }

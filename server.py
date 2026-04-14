@@ -133,11 +133,17 @@ def get_data():
 # ── Members ───────────────────────────────────────────────────────────────────
 @app.route('/api/teams/<team_id>/members', methods=['POST'])
 def add_member(team_id):
-    name = (request.get_json() or {}).get('name', '').strip()
+    payload = request.get_json() or {}
+    name = payload.get('name', '').strip()
     if not name:
         return '', 400
-    member = {'id': secrets.token_urlsafe(6), 'name': name, 'songs': empty_songs()}
+    songs = payload.get('songs', None)
+    move_from = payload.get('move_from', None)  # member id to remove from old team
+    member = {'id': secrets.token_urlsafe(6), 'name': name, 'songs': songs if songs is not None else empty_songs()}
     def patch(data):
+        if move_from:
+            for t in data['teams']:
+                t['members'] = [m for m in t['members'] if m['id'] != move_from]
         for t in data['teams']:
             if t['id'] == team_id:
                 t['members'].append(member)
