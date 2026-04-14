@@ -590,6 +590,13 @@
     <div id="ob-step1">
       <h3>👋 Which team are you on?</h3>
       <div id="ob-team-grid" style="display:flex;flex-direction:column;gap:8px;margin-top:12px"></div>
+      <div id="ob-new-team-row" style="margin-top:12px;display:flex;flex-direction:column;gap:8px">
+        <button class="modal-cancel-btn" id="ob-create-team-btn" style="width:100%;text-align:center">+ Create new team</button>
+        <div id="ob-new-team-inputs" style="display:none;flex-direction:column;gap:8px">
+          <input class="edit-input" id="ob-team-name" placeholder="Team name" maxlength="40" />
+          <button class="modal-confirm-btn" id="ob-team-create-confirm">Create &amp; join</button>
+        </div>
+      </div>
     </div>
     <div id="ob-step2" style="display:none">
       <h3>What's your name?</h3>
@@ -659,8 +666,7 @@ function resolveIdentity(d) {
 let obSelectedTeamId = null;
 
 function maybeShowOnboarding() {
-  if (resolveIdentity(data)) return;   // already have a valid identity
-  if (data.teams.length === 0) return; // no teams yet — nothing to join
+  if (resolveIdentity(data)) return; // already have a valid identity
   showOnboarding();
 }
 
@@ -668,23 +674,53 @@ function showOnboarding() {
   obSelectedTeamId = null;
   document.getElementById('ob-step1').style.display = '';
   document.getElementById('ob-step2').style.display = 'none';
+  document.getElementById('ob-new-team-inputs').style.display = 'none';
+  document.getElementById('ob-team-name').value = '';
+  document.getElementById('ob-create-team-btn').style.display = '';
   const grid = document.getElementById('ob-team-grid');
   grid.innerHTML = '';
   data.teams.forEach(t => {
     const btn = document.createElement('button');
     btn.className = 'modal-confirm-btn';
     btn.textContent = t.name;
-    btn.addEventListener('click', () => {
-      obSelectedTeamId = t.id;
-      document.getElementById('ob-step1').style.display = 'none';
-      document.getElementById('ob-step2').style.display = '';
-      document.getElementById('ob-name').value = '';
-      document.getElementById('ob-error').style.display = 'none';
-      setTimeout(() => document.getElementById('ob-name').focus(), 50);
-    });
+    btn.addEventListener('click', () => obPickTeam(t.id));
     grid.appendChild(btn);
   });
   document.getElementById('onboarding-modal').classList.add('open');
+}
+
+function obPickTeam(teamId) {
+  obSelectedTeamId = teamId;
+  document.getElementById('ob-step1').style.display = 'none';
+  document.getElementById('ob-step2').style.display = '';
+  document.getElementById('ob-name').value = '';
+  document.getElementById('ob-error').style.display = 'none';
+  setTimeout(() => document.getElementById('ob-name').focus(), 50);
+}
+
+document.getElementById('ob-create-team-btn').addEventListener('click', () => {
+  document.getElementById('ob-create-team-btn').style.display = 'none';
+  document.getElementById('ob-new-team-inputs').style.display = 'flex';
+  setTimeout(() => document.getElementById('ob-team-name').focus(), 50);
+});
+
+document.getElementById('ob-team-name').addEventListener('keydown', e => { if (e.key === 'Enter') obCreateAndJoin(); });
+document.getElementById('ob-team-create-confirm').addEventListener('click', obCreateAndJoin);
+
+async function obCreateAndJoin() {
+  const teamName = document.getElementById('ob-team-name').value.trim();
+  if (!teamName) { document.getElementById('ob-team-name').classList.add('input-error'); return; }
+  const res = await fetch('/api/teams', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: teamName }),
+  }).catch(() => null);
+  if (!res?.ok) return;
+  const team = await res.json();
+  data.teams.push({ ...team, members: [] });
+  data.activeTeamId = team.id;
+  renderTeamTabs();
+  obPickTeam(team.id);
 }
 
 document.getElementById('ob-back').addEventListener('click', () => {
