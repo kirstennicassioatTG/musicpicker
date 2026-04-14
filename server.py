@@ -10,6 +10,8 @@ app = Flask(__name__)
 CORS(app)
 
 DATABASE_URL = os.environ.get('DATABASE_URL')
+if not DATABASE_URL:
+    print("WARNING: DATABASE_URL not set — using local data.json (data will not persist on Railway)")
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
 def get_db():
@@ -56,6 +58,14 @@ def file_load():
 def file_save(data):
     with open('data.json', 'w') as f:
         json.dump(data, f)
+
+# Run at module load so gunicorn picks it up (not just `python server.py`)
+if DATABASE_URL:
+    try:
+        init_db()
+        print("DB initialised OK")
+    except Exception as e:
+        print(f"init_db failed: {e}")
 
 def with_data(fn):
     """Read, mutate via fn(data), write back atomically. Works for both DB and file."""
@@ -151,7 +161,5 @@ def delete_member(member_id):
     return '', 204
 
 if __name__ == '__main__':
-    if DATABASE_URL:
-        init_db()
     port = int(os.environ.get('PORT', 3456))
     app.run(host='0.0.0.0', port=port, debug=False)
