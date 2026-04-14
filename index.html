@@ -621,6 +621,7 @@
       border-radius: 20px;
       padding: 28px;
       width: min(420px, 95vw);
+      position: relative;
       animation: popIn 0.25s cubic-bezier(0.34,1.56,0.64,1);
     }
 
@@ -860,6 +861,7 @@
 <!-- Onboarding modal -->
 <div class="modal-overlay" id="onboarding-modal">
   <div class="modal">
+    <button id="ob-close" style="position:absolute;top:14px;right:16px;background:transparent;border:none;color:#6b7280;font-size:1.3rem;cursor:pointer;line-height:1" title="Close">×</button>
     <div id="ob-step1">
       <h3>👋 Which team are you on?</h3>
       <div id="ob-team-grid" style="display:flex;flex-direction:column;gap:8px;margin-top:12px"></div>
@@ -957,6 +959,14 @@ function obPickTeam(teamId) {
   document.getElementById('ob-error').style.display = 'none';
   setTimeout(() => document.getElementById('ob-name').focus(), 50);
 }
+
+function closeOnboarding() {
+  document.getElementById('onboarding-modal').classList.remove('open');
+}
+document.getElementById('ob-close').addEventListener('click', closeOnboarding);
+document.getElementById('onboarding-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('onboarding-modal')) closeOnboarding();
+});
 
 document.getElementById('ob-back').addEventListener('click', () => {
   document.getElementById('ob-step1').style.display = '';
