@@ -606,7 +606,7 @@
     </div>
     <div id="ob-step2" style="display:none">
       <h3>What's your name?</h3>
-      <input class="edit-input" id="ob-name" placeholder="Your name" maxlength="30" style="margin-top:8px" />
+      <input class="edit-input" id="ob-name" placeholder="First and last name" maxlength="40" style="margin-top:8px" />
       <div id="ob-error" style="color:#ef4444;font-size:0.8rem;margin-top:6px;display:none"></div>
       <div class="modal-actions">
         <button class="modal-cancel-btn" id="ob-back">← Back</button>
@@ -715,7 +715,12 @@ document.getElementById('ob-confirm').addEventListener('click', confirmOnboardin
 async function confirmOnboarding() {
   const name = document.getElementById('ob-name').value.trim();
   const errEl = document.getElementById('ob-error');
-  if (!name) { document.getElementById('ob-name').classList.add('input-error'); return; }
+  if (!name || name.split(/\s+/).length < 2) {
+    document.getElementById('ob-name').classList.add('input-error');
+    errEl.textContent = 'Please enter your first and last name.';
+    errEl.style.display = '';
+    return;
+  }
 
   const team = data.teams.find(t => t.id === obSelectedTeamId);
   if (!team) return;
