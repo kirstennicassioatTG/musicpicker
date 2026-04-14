@@ -1,5 +1,6 @@
 import json
 import os
+import secrets
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
@@ -8,11 +9,23 @@ DATA_FILE = 'data.json'
 app = Flask(__name__)
 CORS(app)
 
+def backfill_ids(data):
+    changed = False
+    for team in data.get('teams', []):
+        for member in team.get('members', []):
+            if 'id' not in member:
+                member['id'] = secrets.token_urlsafe(6)
+                changed = True
+    return changed
+
 def load():
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE) as f:
-                return json.load(f)
+                data = json.load(f)
+            if backfill_ids(data):
+                save(data)
+            return data
         except Exception:
             pass
     return {'activeTeamId': None, 'teams': []}

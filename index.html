@@ -273,10 +273,27 @@
       border: 1px solid #2d2d4e;
       border-radius: 16px;
       padding: 20px;
-      transition: border-color 0.2s;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
 
     .member-card:hover { border-color: #4f46e5; }
+
+    .member-card--mine {
+      border-color: #f472b6 !important;
+      box-shadow: 0 0 20px #f472b622;
+    }
+
+    .you-badge {
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      background: #f472b622;
+      color: #f472b6;
+      border: 1px solid #f472b644;
+      border-radius: 999px;
+      padding: 2px 7px;
+    }
 
     .member-card-header {
       display: flex;
@@ -290,7 +307,8 @@
       font-size: 1rem;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
+      flex-wrap: wrap;
     }
 
     .member-avatar {
@@ -397,7 +415,6 @@
     }
 
     .song-inputs { display: flex; flex-direction: column; gap: 4px; }
-
     .song-fields { display: flex; gap: 6px; }
     .song-fields .edit-input:first-child { flex: 1.2; }
     .song-fields .edit-input:last-child  { flex: 1; }
@@ -432,7 +449,7 @@
 
     .delete-member-btn:hover { background: #ef444422; }
 
-    /* ── Empty states ── */
+    /* ── Empty / no-team states ── */
     .empty-state {
       text-align: center;
       color: #4b5563;
@@ -467,7 +484,7 @@
 
     .create-team-btn:hover { opacity: 0.9; }
 
-    /* ── Modal ── */
+    /* ── Modals ── */
     .modal-overlay {
       display: none;
       position: fixed;
@@ -486,7 +503,7 @@
       border: 1px solid #4f46e5;
       border-radius: 20px;
       padding: 28px;
-      width: min(420px, 95vw);
+      width: min(440px, 95vw);
       animation: popIn 0.25s cubic-bezier(0.34,1.56,0.64,1);
     }
 
@@ -526,6 +543,46 @@
     }
 
     .modal-confirm-btn:hover { opacity: 0.9; }
+
+    /* ── Onboarding modal ── */
+    .onboarding-team-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+
+    .onboarding-team-btn {
+      background: #0f0f1a;
+      border: 1px solid #2d2d4e;
+      border-radius: 10px;
+      color: #e5e7eb;
+      padding: 12px 16px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: left;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .onboarding-team-btn:hover {
+      border-color: #4f46e5;
+      background: #1e1e38;
+    }
+
+    .onboarding-team-label {
+      font-size: 0.8rem;
+      color: #6b7280;
+      margin-bottom: 12px;
+    }
+
+    .onboarding-error {
+      color: #ef4444;
+      font-size: 0.8rem;
+      margin-top: 6px;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -580,6 +637,29 @@
   </div>
 </div>
 
+<!-- Onboarding modal -->
+<div class="modal-overlay" id="onboarding-modal">
+  <div class="modal">
+    <h3 id="onboarding-title">Which team are you on?</h3>
+
+    <!-- Step 1: pick team -->
+    <div id="onboarding-step-1">
+      <div class="onboarding-team-grid" id="onboarding-team-grid"></div>
+    </div>
+
+    <!-- Step 2: enter name -->
+    <div id="onboarding-step-2" style="display:none">
+      <p class="onboarding-team-label" id="onboarding-team-label"></p>
+      <input class="edit-input" id="onboarding-name" placeholder="Your name" maxlength="30" />
+      <p class="onboarding-error" id="onboarding-error"></p>
+      <div class="modal-actions">
+        <button class="modal-cancel-btn" id="onboarding-back">Back</button>
+        <button class="modal-confirm-btn" id="onboarding-join">Join Team</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const COLORS = [
@@ -597,6 +677,28 @@ function escapeHtml(s) {
 }
 function emptySongs() { return Array.from({length:5}, () => ({title:'', url:''})); }
 
+// ── Identity ──────────────────────────────────────────────────────────────────
+const IDENTITY_KEY = 'musicpicker_identity';
+
+function getIdentity() {
+  try { return JSON.parse(localStorage.getItem(IDENTITY_KEY)) || null; }
+  catch { return null; }
+}
+
+function setIdentity(teamId, memberId) {
+  try { localStorage.setItem(IDENTITY_KEY, JSON.stringify({ teamId, memberId })); } catch {}
+}
+
+function resolveIdentity(d) {
+  const id = getIdentity();
+  if (!id) return null;
+  const team = (d.teams || []).find(t => t.id === id.teamId);
+  if (!team) return null;
+  const member = (team.members || []).find(m => m.id === id.memberId);
+  if (!member) return null;
+  return { team, member };
+}
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let data = { activeTeamId: null, teams: [] };
 
@@ -610,7 +712,11 @@ async function loadData() {
     const d = await res.json();
     if (d && Array.isArray(d.teams)) {
       data = d;
-      if (!data.teams.find(t => t.id === data.activeTeamId)) {
+      // Always prefer the user's own team as the active tab (local only)
+      const resolved = resolveIdentity(data);
+      if (resolved) {
+        data.activeTeamId = resolved.team.id;
+      } else if (!data.teams.find(t => t.id === data.activeTeamId)) {
         data.activeTeamId = data.teams[0]?.id || null;
       }
     }
@@ -625,11 +731,11 @@ function saveData() {
   }).catch(() => {});
 }
 
-// Poll every 5 seconds so teammates' changes appear automatically
+// Poll every 5s — compare only teams so the local activeTeamId override doesn't trigger false diffs
 setInterval(async () => {
-  const before = JSON.stringify(data);
+  const before = JSON.stringify(data.teams);
   await loadData();
-  if (JSON.stringify(data) !== before) renderAll();
+  if (JSON.stringify(data.teams) !== before) renderAll();
 }, 5000);
 
 // ── Team operations ───────────────────────────────────────────────────────────
@@ -644,7 +750,6 @@ function addTeam(name) {
 function switchTeam(id) {
   if (data.activeTeamId === id) return;
   data.activeTeamId = id;
-  saveData();
   renderAll();
   document.getElementById('result-banner').style.display = 'none';
 }
@@ -832,6 +937,7 @@ function renderMembers() {
   const grid = document.getElementById('members-grid');
   const title = document.getElementById('section-title');
   const addBtn = document.getElementById('add-member-btn');
+  const identity = resolveIdentity(data);
 
   grid.innerHTML = '';
   drawWheel();
@@ -857,15 +963,16 @@ function renderMembers() {
   }
 
   team.members.forEach((m, i) => {
+    const isMe = !!(identity && m.id === identity.member.id);
     const card = document.createElement('div');
-    card.className = 'member-card';
+    card.className = 'member-card' + (isMe ? ' member-card--mine' : '');
     card.dataset.index = i;
-    card.innerHTML = buildViewCard(m, i);
+    card.innerHTML = buildViewCard(m, i, isMe);
     grid.appendChild(card);
   });
 }
 
-function buildViewCard(m, i) {
+function buildViewCard(m, i, isMe) {
   const [bg, fg] = getColor(i);
   const songRows = m.songs.map((s, si) => {
     const has = s.title.trim();
@@ -876,11 +983,14 @@ function buildViewCard(m, i) {
     </div>`;
   }).join('');
 
+  const badge = isMe ? `<span class="you-badge">You</span>` : '';
+
   return `
     <div class="member-card-header">
       <div class="member-name">
         <div class="member-avatar" style="background:${bg};color:${fg}">${escapeHtml(initials(m.name))}</div>
         ${escapeHtml(m.name)}
+        ${badge}
       </div>
       <div class="card-actions">
         <button class="icon-btn" onclick="enterEdit(${i})" title="Edit songs">✏️</button>
@@ -916,7 +1026,7 @@ function buildEditCard(m, i) {
 
 function enterEdit(i) {
   const card = document.querySelector(`.member-card[data-index="${i}"]`);
-  card.innerHTML = buildEditCard(activeTeam().members[i], i);
+  if (card) card.innerHTML = buildEditCard(activeTeam().members[i], i);
 }
 
 function saveEdit(i) {
@@ -929,7 +1039,7 @@ function saveEdit(i) {
   form.querySelectorAll('[data-si]').forEach(input => {
     songs[parseInt(input.dataset.si)][input.dataset.field] = input.value.trim();
   });
-  team.members[i] = { ...team.members[i], name, songs };
+  team.members[i] = { ...team.members[i], name, songs }; // preserves id
   saveData();
   renderMembers();
 }
@@ -962,13 +1072,22 @@ document.getElementById('new-member-name').addEventListener('input', () => {
 });
 document.getElementById('member-modal-confirm').addEventListener('click', addMember);
 
-function addMember() {
-  const name = document.getElementById('new-member-name').value.trim();
-  if (!name) { document.getElementById('new-member-name').classList.add('input-error'); return; }
-  activeTeam().members.push({ name, songs: emptySongs() });
+function addMember(name, teamId) {
+  // Called from modal (no args) or from onboarding (with args)
+  if (!name) {
+    name = document.getElementById('new-member-name').value.trim();
+    if (!name) { document.getElementById('new-member-name').classList.add('input-error'); return null; }
+  }
+  const team = teamId ? data.teams.find(t => t.id === teamId) : activeTeam();
+  const id = uid();
+  team.members.push({ id, name, songs: emptySongs() });
   saveData();
-  closeMemberModal();
-  renderMembers();
+  if (!teamId) {
+    // Called from the modal — just close and re-render
+    closeMemberModal();
+    renderMembers();
+  }
+  return id;
 }
 
 // ── Add team modal ────────────────────────────────────────────────────────────
@@ -997,12 +1116,86 @@ function confirmAddTeam() {
   addTeam(name);
 }
 
+// ── Onboarding ────────────────────────────────────────────────────────────────
+let _onboardingTeamId = null;
+
+function maybeShowOnboarding() {
+  if (resolveIdentity(data)) return; // returning visitor
+  if (data.teams.length === 0) return; // no teams yet — admin sets up first
+  showOnboardingStep1();
+}
+
+function showOnboardingStep1() {
+  const grid = document.getElementById('onboarding-team-grid');
+  grid.innerHTML = '';
+  data.teams.forEach(team => {
+    const btn = document.createElement('button');
+    btn.className = 'onboarding-team-btn';
+    btn.textContent = team.name;
+    btn.addEventListener('click', () => selectOnboardingTeam(team.id, team.name));
+    grid.appendChild(btn);
+  });
+  document.getElementById('onboarding-title').textContent = 'Which team are you on?';
+  document.getElementById('onboarding-step-1').style.display = '';
+  document.getElementById('onboarding-step-2').style.display = 'none';
+  document.getElementById('onboarding-modal').classList.add('open');
+}
+
+function selectOnboardingTeam(teamId, teamName) {
+  _onboardingTeamId = teamId;
+  document.getElementById('onboarding-step-1').style.display = 'none';
+  document.getElementById('onboarding-step-2').style.display = '';
+  document.getElementById('onboarding-title').textContent = "What's your name?";
+  document.getElementById('onboarding-team-label').textContent = `Joining: ${teamName}`;
+  document.getElementById('onboarding-name').value = '';
+  document.getElementById('onboarding-error').style.display = 'none';
+  setTimeout(() => document.getElementById('onboarding-name').focus(), 50);
+}
+
+document.getElementById('onboarding-back').addEventListener('click', showOnboardingStep1);
+document.getElementById('onboarding-join').addEventListener('click', confirmOnboarding);
+document.getElementById('onboarding-name').addEventListener('keydown', e => {
+  if (e.key === 'Enter') confirmOnboarding();
+});
+
+function confirmOnboarding() {
+  const name = document.getElementById('onboarding-name').value.trim();
+  const errEl = document.getElementById('onboarding-error');
+
+  if (!name) {
+    document.getElementById('onboarding-name').classList.add('input-error');
+    return;
+  }
+
+  const team = data.teams.find(t => t.id === _onboardingTeamId);
+  const dupe = team.members.find(m => m.name.toLowerCase() === name.toLowerCase());
+  if (dupe) {
+    errEl.textContent = `Someone named "${dupe.name}" is already on this team.`;
+    errEl.style.display = '';
+    return;
+  }
+
+  const memberId = addMember(name, _onboardingTeamId);
+  setIdentity(_onboardingTeamId, memberId);
+  data.activeTeamId = _onboardingTeamId;
+
+  document.getElementById('onboarding-modal').classList.remove('open');
+  renderAll();
+
+  // Auto-open edit on their new card
+  const idx = team.members.findIndex(m => m.id === memberId);
+  if (idx >= 0) setTimeout(() => enterEdit(idx), 50);
+}
+
 // ── Spin buttons ──────────────────────────────────────────────────────────────
 document.getElementById('spin-btn').addEventListener('click', spin);
 document.getElementById('wheel-center-btn').addEventListener('click', spin);
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-loadData().then(() => renderAll());
+loadData().then(() => {
+  renderAll();
+  maybeShowOnboarding();
+});
 </script>
 </body>
 </html>
