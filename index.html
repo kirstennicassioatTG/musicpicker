@@ -1554,10 +1554,16 @@ function buildViewCard(m, i, isMe) {
   const [bg, fg] = getColor(i);
   const songRows = m.songs.map((s, si) => {
     const has = s.title.trim();
+    const ytBtn = has && s.url
+      ? `<button class="yt-pill" onclick="openUrl('${s.url.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+          YT
+        </button>`
+      : `<div class="yt-dot empty" title="No YouTube link"></div>`;
     return `<div class="song-item">
       <span class="song-num">${si+1}</span>
       <div class="song-info"><div class="song-name ${has ? '' : 'empty'}">${has ? escapeHtml(s.title) : 'empty slot'}</div></div>
-      <div class="yt-dot ${has && s.url ? '' : 'empty'}" title="${has && s.url ? 'YouTube link added' : 'No YouTube link'}"></div>
+      ${ytBtn}
     </div>`;
   }).join('');
 
